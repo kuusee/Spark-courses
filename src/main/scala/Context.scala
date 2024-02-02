@@ -8,7 +8,9 @@ trait Context {
   private def createSession(appName: String) = {
     SparkSession.builder()
       .appName(appName)
-      .master("local[*]")
+      .master("local")
+      .config("spark.executor.memory", "3g")
+      .config("spark.executor.processTreeMetrics.enabled", "false")
       .getOrCreate()
   }
 }

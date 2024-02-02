@@ -1,4 +1,4 @@
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
 
 //object DfColumn extends DfColumn {
@@ -11,9 +11,12 @@ import org.apache.spark.sql.functions._
 object DataSet_3_step_4 extends App with Context {
   override val appName: String = "DataSet_3_step_4"
 
-  def convert(df: DataFrame): DataFrame = {
+  def withCompanyReview(df: DataFrame): DataFrame = {
     df
-      .withColumn("CompanyReviews", regexp_replace(col("CompanyReviews"), ",", "")
+      .withColumn(
+        "CompanyReviews", regexp_replace(
+          col("CompanyReviews"), "[^[0-9]]", ""
+        )
       )
   }
 
@@ -24,8 +27,27 @@ object DataSet_3_step_4 extends App with Context {
         Map(
           "JobTitle" -> "Unknown",
           "Company" -> "Unknown",
+          "Location" -> "Unknown",
           "CompanyReviews" -> 0,
         )
+      )
+  }
+
+  def withLowerCase(df: DataFrame): DataFrame = {
+    // Преобразовываем слова в нижний регистр
+    df.withColumn("Word", lower(col("Word")))
+  }
+
+  def withJobTitle(columnName: String)(df: DataFrame): DataFrame = {
+    val regexp1 = regexp_replace(_: Column, "\"", "")
+    val regexp2 = regexp_replace(_: Column, "[ ]", "_")
+    val regexp3 = regexp_replace(_: Column, "[\\p{C}\\p{Zs}]", "")
+
+    df
+      .withColumn(columnName,
+        regexp3(
+          regexp2(
+            regexp1(col(columnName))))
       )
   }
 
@@ -36,7 +58,7 @@ object DataSet_3_step_4 extends App with Context {
     .option("multiLine", "true")
     .option("escape", "\"")
     .option("quote", "\"")
-//    .option("inferSchema", "true")
+    .option("inferSchema", "true")
     .csv("src/main/resources/AIJobsIndustry.csv")
 
 
@@ -44,35 +66,22 @@ object DataSet_3_step_4 extends App with Context {
   //""">【智通所】LTE網路研發工程師(定期契約)"
   //"PhD Researcher ""Machine Learning for correct component design and manufacturing"""
 
-  val df1 = spark
-    .read
-    .option("lineSep", "\r")
-    .text("src/main/resources/AIJobsIndustry.csv")
-
-  df1.withColumn("value",
-      regexp_replace($"value", "\"\"\"\\w", "XXXXX")
-    )
-
-  df1.filter(col("value").rlike("\"\"\"\\w")).show()
-
-  df1.show()
-
 
   val cnt = df
-    .transform(convert)
-//    .transform(replaceNull)
-
-  cnt
-    .show()
+    .transform(withCompanyReview)
+    .transform(replaceNull)
+    .transform(withJobTitle("JobTitle"))
 
   val cnt2 = cnt
-    .select("CompanyReviews").distinct()
-    .orderBy(col("CompanyReviews"))
+    .select("JobTitle").distinct()
+//    .orderBy(col("JobTitle"))
+
+  cnt2.show()
 
   cnt2
     .write
     .format("json")
     .mode(SaveMode.Overwrite)
-    .save("src/main/resources/data/test2")
+    .save("src/main/resources/data/JobTitle3")
 
 }
